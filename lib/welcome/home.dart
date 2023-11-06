@@ -1,6 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:pdfaudio/about/about_app.dart';
 import 'package:pdfaudio/developer/developer_screen.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key});
@@ -16,6 +22,8 @@ class _HomeScreenState extends State<HomeScreen> {
     "Report.pdf",
   ];
 
+  FlutterTts flutterTts = FlutterTts();
+
   int _selectedIndex = 1; // Initially set "Upload" as the active item
 
   void _onItemTapped(int index) {
@@ -28,6 +36,52 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => DeveloperScreen(),
     ));
+  }
+
+  Future<void> _uploadPDF() async {
+    await Permission.storage.request();
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (result != null) {
+        PlatformFile file = result.files.first;
+
+        convertPDFToAudio(file.path!);
+      } else {
+        // User canceled the file picker
+        print("File selection canceled.");
+      }
+    } catch (e) {
+      // Handle any errors that may occur during file selection
+      print("Error: $e");
+    }
+  }
+
+  void convertPDFToAudio(String pdfFilePath) async {
+    // Read the PDF content
+    String pdfContent = await readPDFContent(pdfFilePath);
+    print("fikls" + pdfFilePath);
+    print(pdfContent);
+
+    // Initialize TTS (Text-to-Speech) engine
+    await flutterTts.setLanguage("en-US");
+    await flutterTts.setPitch(1.0);
+    await flutterTts.setSpeechRate(0.5);
+
+    // Convert the PDF content to speech
+    await flutterTts.speak(pdfContent);
+  }
+
+  Future<String> readPDFContent(String pdfFilePath) async {
+    PdfDocument document =
+        PdfDocument(inputBytes: File(pdfFilePath).readAsBytesSync());
+    String text = PdfTextExtractor(document).extractText(startPageIndex: 0);
+    document.dispose();
+
+    return text;
   }
 
   @override
@@ -46,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(height: 20),
           GestureDetector(
             onTap: () {
-              // Implement the PDF upload functionality here
+              _uploadPDF();
             },
             child: Container(
               width: 100,
@@ -68,6 +122,8 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(fontSize: 18),
           ),
           SizedBox(height: 20),
+          SizedBox(height: 20),
+          AudioControlWidget(flutterTts: flutterTts),
           Text(
             "Recent Files",
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -123,6 +179,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
         selectedItemColor: Colors.blue, // Color for the active item
       ),
+    );
+  }
+}
+
+class AudioControlWidget extends StatefulWidget {
+  final FlutterTts flutterTts;
+
+  AudioControlWidget({required this.flutterTts});
+
+  @override
+  _AudioControlWidgetState createState() => _AudioControlWidgetState();
+}
+
+class _AudioControlWidgetState extends State<AudioControlWidget> {
+  bool isPlaying = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        IconButton(
+          icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+          onPressed: () {
+            if (isPlaying) {
+              widget.flutterTts.stop();
+            } else {
+              widget.flutterTts.speak("Your PDF content here");
+            }
+            setState(() {
+              isPlaying = !isPlaying;
+            });
+          },
+        ),
+        IconButton(
+          icon: Icon(Icons.volume_up),
+          onPressed: () {
+            // Implement volume control logic here
+            // You can use the flutterTts.setVolume() method to set the volume.
+          },
+        ),
+        // Add more playback controls as needed (e.g., seek, rewind, fast forward, etc.)
+      ],
     );
   }
 }
